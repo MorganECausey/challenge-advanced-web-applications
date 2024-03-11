@@ -5,6 +5,8 @@ import LoginForm from './LoginForm'
 import Message from './Message'
 import ArticleForm from './ArticleForm'
 import Spinner from './Spinner'
+import axiosWithAuth from '../axios/index'
+import PrivateRoutes from './PrivateRoutes'
 
 const articlesUrl = 'http://localhost:9000/api/articles'
 const loginUrl = 'http://localhost:9000/api/login'
@@ -18,8 +20,8 @@ export default function App() {
 
   // ✨ Research `useNavigate` in React Router v.6
   const navigate = useNavigate()
-  const redirectToLogin = () => { /* ✨ implement */ }
-  const redirectToArticles = () => { /* ✨ implement */ }
+  const redirectToLogin = () => { navigate('/');}
+  const redirectToArticles = () => { navigate('/articles'); }
 
   const logout = () => {
     // ✨ implement
@@ -27,6 +29,9 @@ export default function App() {
     // and a message saying "Goodbye!" should be set in its proper state.
     // In any case, we should redirect the browser back to the login screen,
     // using the helper above.
+    localStorage.removeItem('token');
+    setMessage('Goodbye!');
+    redirectToLogin();
   }
 
   const login = ({ username, password }) => {
@@ -36,9 +41,34 @@ export default function App() {
     // On success, we should set the token to local storage in a 'token' key,
     // put the server success message in its proper state, and redirect
     // to the Articles screen. Don't forget to turn off the spinner!
+  setMessage('');
+  setSpinnerOn(true);
+  axiosWithAuth().post(loginUrl, {username, password})
+    .then(res => {
+      setMessage(res.data.message)
+      localStorage.setItem('token', res.data.token);
+      redirectToArticles();
+      setSpinnerOn(false);
+    })
+    .catch(err => {
+      setSpinnerOn(false);
+      setMessage('Login Error!')
+      console.log(err)
+    })
   }
 
   const getArticles = () => {
+    setMessage('');
+    setSpinnerOn(true);
+    axiosWithAuth().get(articlesUrl)
+      .then(res => {
+        setArticles(res.data.articles);
+        setMessage(res.data.message)
+        setSpinnerOn(false);
+      })
+      .catch(err => {
+        (err.response.status === 401) ? redirectToLogin() : console.error(err);
+      })
     // ✨ implement
     // We should flush the message state, turn on the spinner
     // and launch an authenticated request to the proper endpoint.
@@ -50,6 +80,18 @@ export default function App() {
   }
 
   const postArticle = article => {
+    setMessage('');
+    setSpinnerOn(true);
+    axiosWithAuth().post(articlesUrl, article)
+      .then (res => {
+        setMessage(res.data.message)
+        setArticles([...articles, res.data.article]);
+        setMessage(res.data.message);
+        setSpinnerOn(false);
+      })
+      .catch(err => {
+        (err.response.status === 401) ? redirectToLogin() : console.error(err);
+      })
     // ✨ implement
     // The flow is very similar to the `getArticles` function.
     // You'll know what to do! Use log statements or breakpoints
@@ -57,19 +99,45 @@ export default function App() {
   }
 
   const updateArticle = ({ article_id, article }) => {
+    setMessage('');
+    setSpinnerOn(true);
+    axiosWithAuth().put(`${articlesUrl}/${article_id}`, article)
+      .then(res => {
+        setMessage(res.data.message)
+        const updateArticles = articles.map((update) => (update.article_id === article.article_id) ? res.data.article : update)
+        setArticles(updateArticles);
+        setCurrentArticleId();
+        setSpinnerOn(false)
+      })
+      .catch(err => {
+        (err.response.status === 401) ? redirectToLogin() : console.error(err);
+      })
     // ✨ implement
     // You got this!
   }
 
   const deleteArticle = article_id => {
+    setMessage('');
+    setSpinnerOn(true);
+    axiosWithAuth()
+      .delete(`${articlesUrl}/${article_id}`)
+      .then(res => {
+        getArticles();
+        setMessage(res.data.message);
+        setArticles(articles.filter((deleteArc) => deleteArc.article_id !== article_id))
+        setSpinnerOn(false);
+      })
+      .catch(err => {
+        console.error(err);
+      })
     // ✨ implement
   }
 
   return (
     // ✨ fix the JSX: `Spinner`, `Message`, `LoginForm`, `ArticleForm` and `Articles` expect props ❗
     <>
-      <Spinner />
-      <Message />
+      <Spinner on={spinnerOn}/>
+      <Message message={message}/>
       <button id="logout" onClick={logout}>Logout from app</button>
       <div id="wrapper" style={{ opacity: spinnerOn ? "0.25" : "1" }}> {/* <-- do not change this line */}
         <h1>Advanced Web Applications</h1>
@@ -78,13 +146,26 @@ export default function App() {
           <NavLink id="articlesScreen" to="/articles">Articles</NavLink>
         </nav>
         <Routes>
-          <Route path="/" element={<LoginForm />} />
+          <Route path="/" element={<LoginForm login={login}/>} />
+          <Route element={<PrivateRoutes />}>
           <Route path="articles" element={
             <>
-              <ArticleForm />
-              <Articles />
+              <ArticleForm 
+              postArticle={postArticle}
+              updateArticle={updateArticle}
+              currentArticleId={currentArticleId}
+              setCurrentArticleId={setCurrentArticleId}
+              articles={articles}
+              />
+              <Articles 
+              getArticles={getArticles}
+              deleteArticle={deleteArticle}
+              setCurrentArticleId={setCurrentArticleId}
+              articles={articles}
+              />
             </>
           } />
+          </Route>
         </Routes>
         <footer>Bloom Institute of Technology 2022</footer>
       </div>
